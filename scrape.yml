@@ -1,0 +1,49 @@
+name: Scrape ExpiredDomains
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: "Lovable job id (UUID). Leave blank for ad-hoc runs."
+        required: false
+        default: ""
+      note:
+        description: "Optional note for this run"
+        required: false
+        default: ""
+
+jobs:
+  scrape:
+    environment:
+      name: otp-approval
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Prompt for OTP
+        id: otp
+        run: |
+          echo "otp=${{ vars.OTP_CODE }}" >> "$GITHUB_OUTPUT"
+
+      - name: Run scraper
+        env:
+          EXPIRED_USER: ${{ secrets.EXPIRED_USER }}
+          EXPIRED_PASS: ${{ secrets.EXPIRED_PASS }}
+          OTP_CODE: ${{ steps.otp.outputs.otp }}
+          LOVABLE_WEBHOOK_URL: ${{ secrets.LOVABLE_WEBHOOK_URL }}
+          LOVABLE_WEBHOOK_SECRET: ${{ secrets.LOVABLE_WEBHOOK_SECRET }}
+          JOB_ID: ${{ inputs.job_id }}
+          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python scripts/scrape_expireddomains.py
